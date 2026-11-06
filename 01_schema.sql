@@ -1,0 +1,19 @@
+-- Crownfield teaching prototype. MySQL 8.4 or MySQL 8.0.16+; run on local test instance only.
+-- CAUTION: resets database crownfield_eye_demo. All patient data below is fictional.
+DROP DATABASE IF EXISTS crownfield_eye_demo;
+CREATE DATABASE crownfield_eye_demo CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE crownfield_eye_demo;
+CREATE TABLE specialty (specialty_id INT AUTO_INCREMENT PRIMARY KEY, specialty_name VARCHAR(80) NOT NULL UNIQUE) ENGINE=InnoDB;
+CREATE TABLE clinic (clinic_id INT AUTO_INCREMENT PRIMARY KEY, clinic_name VARCHAR(80) NOT NULL UNIQUE) ENGINE=InnoDB;
+CREATE TABLE patient (patient_id INT AUTO_INCREMENT PRIMARY KEY, patient_code VARCHAR(10) NOT NULL UNIQUE, patient_name VARCHAR(100) NOT NULL, postcode VARCHAR(12) NOT NULL) ENGINE=InnoDB;
+CREATE TABLE clinician (clinician_id INT AUTO_INCREMENT PRIMARY KEY, clinician_name VARCHAR(100) NOT NULL, specialty_id INT NOT NULL, CONSTRAINT fk_clinician_specialty FOREIGN KEY (specialty_id) REFERENCES specialty(specialty_id) ON DELETE RESTRICT) ENGINE=InnoDB;
+CREATE TABLE appointment (appointment_id INT AUTO_INCREMENT PRIMARY KEY, patient_id INT NOT NULL, clinician_id INT NOT NULL, clinic_id INT NOT NULL, appointment_date DATE NOT NULL, appointment_time TIME NOT NULL, notes VARCHAR(255), CONSTRAINT fk_appt_patient FOREIGN KEY (patient_id) REFERENCES patient(patient_id) ON DELETE RESTRICT, CONSTRAINT fk_appt_clinician FOREIGN KEY (clinician_id) REFERENCES clinician(clinician_id) ON DELETE RESTRICT, CONSTRAINT fk_appt_clinic FOREIGN KEY (clinic_id) REFERENCES clinic(clinic_id) ON DELETE RESTRICT, UNIQUE KEY uq_clinician_slot(clinician_id, appointment_date, appointment_time)) ENGINE=InnoDB;
+CREATE TABLE diagnosis (diagnosis_id INT AUTO_INCREMENT PRIMARY KEY, diagnosis_name VARCHAR(120) NOT NULL UNIQUE) ENGINE=InnoDB;
+CREATE TABLE appointment_diagnosis (appointment_id INT NOT NULL, diagnosis_id INT NOT NULL, PRIMARY KEY(appointment_id,diagnosis_id), CONSTRAINT fk_ad_appt FOREIGN KEY(appointment_id) REFERENCES appointment(appointment_id) ON DELETE CASCADE, CONSTRAINT fk_ad_diag FOREIGN KEY(diagnosis_id) REFERENCES diagnosis(diagnosis_id) ON DELETE RESTRICT) ENGINE=InnoDB;
+CREATE TABLE prescription (prescription_id INT AUTO_INCREMENT PRIMARY KEY, appointment_id INT NOT NULL, CONSTRAINT fk_rx_appt FOREIGN KEY(appointment_id) REFERENCES appointment(appointment_id) ON DELETE RESTRICT) ENGINE=InnoDB;
+CREATE TABLE medicine (medicine_id INT AUTO_INCREMENT PRIMARY KEY, medicine_name VARCHAR(120) NOT NULL UNIQUE) ENGINE=InnoDB;
+CREATE TABLE prescription_item (prescription_item_id INT AUTO_INCREMENT PRIMARY KEY, prescription_id INT NOT NULL, medicine_id INT NOT NULL, dosage VARCHAR(80) NOT NULL, route VARCHAR(50) NOT NULL, frequency VARCHAR(80) NOT NULL, duration VARCHAR(80) NOT NULL, CONSTRAINT fk_item_rx FOREIGN KEY(prescription_id) REFERENCES prescription(prescription_id) ON DELETE CASCADE, CONSTRAINT fk_item_medicine FOREIGN KEY(medicine_id) REFERENCES medicine(medicine_id) ON DELETE RESTRICT, CONSTRAINT chk_item_dose CHECK (CHAR_LENGTH(TRIM(dosage)) > 0)) ENGINE=InnoDB;
+CREATE TABLE follow_up_plan (follow_up_id INT AUTO_INCREMENT PRIMARY KEY, appointment_id INT NOT NULL UNIQUE, follow_up_duration VARCHAR(30) NOT NULL, due_date DATE NOT NULL, priority VARCHAR(20) NOT NULL DEFAULT 'Routine', status VARCHAR(20) NOT NULL DEFAULT 'Pending', CONSTRAINT fk_follow_appt FOREIGN KEY(appointment_id) REFERENCES appointment(appointment_id) ON DELETE RESTRICT, CONSTRAINT chk_follow_priority CHECK(priority IN ('Routine','High','Urgent')), CONSTRAINT chk_follow_status CHECK(status IN ('Pending','Booked','Completed','Cancelled'))) ENGINE=InnoDB;
+-- Example ALTER TABLE required by Part B: rejects blank external codes.
+ALTER TABLE patient ADD CONSTRAINT chk_patient_code CHECK (CHAR_LENGTH(TRIM(patient_code)) > 0);
+-- NOTE: due_date >= appointment_date is cross-table; enforced by trigger in 03_procedure_and_trigger.sql.
